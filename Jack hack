@@ -1,0 +1,39 @@
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+
+local USER_ID = 3541069971 -- Change to your target ID
+local CHECK_DELAY = 5 -- Seconds between checks
+
+local function getPresence()
+    local success, result = pcall(function()
+        return game:HttpGet("https://presence.roblox.com/v1/presence/users", true, {
+            ["Content-Type"] = "application/json"
+        }, HttpService:JSONEncode({userIds = {USER_ID}}))
+    end)
+
+    if success then
+        local data = HttpService:JSONDecode(result)
+        local userData = data.userPresences[1]
+        if userData and userData.placeId and userData.placeId ~= 0 then
+            return userData.placeId, userData.gameId
+        end
+    end
+    return nil, nil
+end
+
+local function autoJoin()
+    while true do
+        local placeId, jobId = getPresence()
+        if placeId then
+            print("Joining game:", placeId, jobId)
+            TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
+            break
+        else
+            print("Player not in game. Retrying in "..CHECK_DELAY.." seconds...")
+            task.wait(CHECK_DELAY)
+        end
+    end
+end
+
+autoJoin()

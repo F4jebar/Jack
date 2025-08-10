@@ -1,0 +1,145 @@
+-- Services
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local Http = game:GetService("HttpService")
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.CoreGui
+
+local SmileyButton = Instance.new("ImageButton")
+SmileyButton.Size = UDim2.new(0, 50, 0, 50)
+SmileyButton.Position = UDim2.new(0, 10, 1, -60)
+SmileyButton.BackgroundTransparency = 1
+SmileyButton.Image = "rbxassetid://6031075938" -- Happy face
+SmileyButton.Parent = ScreenGui
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 300, 0, 140)
+Frame.Position = UDim2.new(0.3, 0, 0.3, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Visible = false
+Frame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.Text = "Auto Join GUI"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Parent = Frame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Position = UDim2.new(1, -30, 0, 3)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+CloseBtn.Parent = Frame
+
+local Input = Instance.new("TextBox")
+Input.Size = UDim2.new(1, -20, 0, 30)
+Input.Position = UDim2.new(0, 10, 0, 40)
+Input.PlaceholderText = "Paste Roblox profile or share link"
+Input.Text = ""
+Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+Input.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Input.Parent = Frame
+
+local StartBtn = Instance.new("TextButton")
+StartBtn.Size = UDim2.new(1, -20, 0, 30)
+StartBtn.Position = UDim2.new(0, 10, 0, 80)
+StartBtn.Text = "Start Auto-Join"
+StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StartBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+StartBtn.Parent = Frame
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, -20, 0, 30)
+Status.Position = UDim2.new(0, 10, 0, 120)
+Status.Text = "Waiting..."
+Status.TextColor3 = Color3.fromRGB(255, 255, 255)
+Status.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Status.Parent = Frame
+
+-- Faces
+local HappyFace = "rbxassetid://6031075938"
+local WinkingFace = "rbxassetid://6031075939"
+local AngryFace = "rbxassetid://6031075937"
+
+-- Functions
+local function getUserIdFromAnyLink(link)
+    -- Try direct profile URL
+    local id = string.match(link, "%d+")
+    if id then return tonumber(id) end
+
+    -- Try Roblox share link with ?code=
+    local code = string.match(link, "code=([a-z0-9]+)")
+    if code then
+        local success, result = pcall(function()
+            return game:HttpGet("https://apis.roblox.com/share-api/v1/share-links/" .. code)
+        end)
+        if success then
+            local data = HttpService:JSONDecode(result)
+            if data and data.targetId then
+                return tonumber(data.targetId)
+            end
+        end
+    end
+    return nil
+end
+
+local function getPresence(userId)
+    local success, result = pcall(function()
+        return game:HttpPost("https://presence.roblox.com/v1/presence/users", HttpService:JSONEncode({userIds = {userId}}), Enum.HttpContentType.ApplicationJson)
+    end)
+    if success then
+        local data = HttpService:JSONDecode(result)
+        local userData = data.userPresences and data.userPresences[1]
+        if userData and userData.placeId and userData.placeId ~= 0 then
+            return userData.placeId, userData.gameId
+        end
+    end
+    return nil, nil
+end
+
+local function autoJoin(userId)
+    SmileyButton.Image = WinkingFace
+    while true do
+        local placeId, jobId = getPresence(userId)
+        if placeId then
+            Status.Text = "Joining game..."
+            TeleportService:TeleportToPlaceInstance(placeId, jobId, Players.LocalPlayer)
+            break
+        else
+            Status.Text = "Player not in game. Retrying..."
+            task.wait(5)
+        end
+    end
+    SmileyButton.Image = HappyFace
+end
+
+-- Events
+StartBtn.MouseButton1Click:Connect(function()
+    local userId = getUserIdFromAnyLink(Input.Text)
+    if userId then
+        Status.Text = "Starting auto-join..."
+        autoJoin(userId)
+    else
+        Status.Text = "Invalid link!"
+        SmileyButton.Image = AngryFace
+        task.delay(2, function()
+            SmileyButton.Image = HappyFace
+        end)
+    end
+end)
+
+SmileyButton.MouseButton1Click:Connect(function()
+    Frame.Visible = not Frame.Visible
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    Frame.Visible = false
+end)
